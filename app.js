@@ -18,6 +18,15 @@ const API_BASE_URL = 'https://kitachat-production.up.railway.app';
 console.log("AKTIF API_BASE_URL:", API_BASE_URL);
 
 /* ==========================================================
+   HELPER: AMANKAN URL GAMBAR KE RAILWAY
+========================================================== */
+function getSafeImageUrl(url) {
+  if (!url) return '/logo-192.png';
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  return `${API_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
+}
+
+/* ==========================================================
    OPTIMASI 1: Perbaikan STUN Server WebRTC yang valid
 ========================================================== */
 const rtcConfig = {
@@ -615,7 +624,7 @@ function updateUserInterface() {
 
   avatarEls.forEach(el => {
     if (el && currentUser.photo_url) {
-      el.src = currentUser.photo_url;
+      el.src = getSafeImageUrl(currentUser.photo_url);
     }
   });
 
@@ -839,16 +848,16 @@ function renderIncomingMessage(message, silent = false) {
   
   if (message.image_url) {
     const img = document.createElement('img');
-    img.src = message.image_url;
+    img.src = getSafeImageUrl(message.image_url);
     img.style.cssText = 'max-width:220px; border-radius:10px; display:block; margin-top:5px; cursor:pointer;';
-    img.onclick = () => openZoomModal(message.image_url);
+    img.onclick = () => openZoomModal(getSafeImageUrl(message.image_url));
     bubble.appendChild(img);
   }
   
   if (message.audio_url) {
     const audio = document.createElement('audio');
     audio.controls = true;
-    audio.src = message.audio_url;
+    audio.src = getSafeImageUrl(message.audio_url);
     audio.style.cssText = 'margin-top: 4px; width: 210px; height: 32px; display: block;';
     bubble.appendChild(audio);
   }
@@ -1123,7 +1132,7 @@ async function openCallMenu() {
       item.innerHTML = `
         <div style="display: flex; align-items: center; gap: 10px;">
           <div style="position: relative;">
-            <img src="${user.photo_url || '/logo-192.png'}" alt="${user.name}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; border: 1px solid var(--primary-color);">
+            <img src="${getSafeImageUrl(user.photo_url || '/logo-192.png')}" alt="${user.name}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; border: 1px solid var(--primary-color);">
             <span style="position: absolute; bottom: 0; right: 0; width: 10px; height: 10px; background: ${statusColor}; border: 1px solid var(--card-bg); border-radius: 50%;"></span>
           </div>
           <div style="text-align: left;">
@@ -1247,12 +1256,12 @@ function renderAlbumGrid(photos) {
     card.style.cursor = 'pointer';
 
     const img = document.createElement('img');
-    img.src = item.image_url;
+    img.src = getSafeImageUrl(item.image_url);
     img.alt = item.caption || 'Foto';
     img.style.width = '100%';
     img.style.height = '100%';
     img.style.objectFit = 'cover';
-    img.onclick = () => openZoomModal(item.image_url);
+    img.onclick = () => openZoomModal(getSafeImageUrl(item.image_url));
 
     const menuId = `album-menu-${item.id || index}`;
     const menuBtn = document.createElement('button');
@@ -1275,7 +1284,7 @@ function renderAlbumGrid(photos) {
 
     const downloadBtn = document.createElement('button');
     downloadBtn.textContent = 'Simpan';
-    downloadBtn.onclick = () => downloadPhoto(item.image_url);
+    downloadBtn.onclick = () => downloadPhoto(getSafeImageUrl(item.image_url));
     dropdown.appendChild(downloadBtn);
 
     const isOwner =
@@ -1433,7 +1442,7 @@ function openZoomModal(imageUrl) {
   const img = document.getElementById('zoomed-img-element');
 
   if (modal && img) {
-    img.src = imageUrl;
+    img.src = getSafeImageUrl(imageUrl);
     modal.classList.remove('hidden');
     modal.style.display = 'flex';
   }
@@ -1449,7 +1458,7 @@ function closeZoomModal() {
 
 async function downloadPhoto(imageUrl) {
   try {
-    const response = await fetch(imageUrl);
+    const response = await fetch(getSafeImageUrl(imageUrl));
     const blob = await response.blob();
     const url = URL.createObjectURL(blob);
 
@@ -1581,7 +1590,7 @@ async function loadAgendaAndBirthdays() {
       } else {
         bdayContainer.innerHTML = members.map(member => {
           const formattedDate = member.birth_date ? formatDateIndo(member.birth_date) : "Tanggal belum diatur";
-          const avatarSrc = member.profile_picture || 'https://via.placeholder.com/150';
+          const avatarSrc = member.profile_picture ? getSafeImageUrl(member.profile_picture) : '/logo-192.png';
 
           return `
             <div class="birthday-card">
@@ -1724,7 +1733,7 @@ async function loadFamilyMembers() {
 
       card.innerHTML = `
         <div style="position: relative;">
-          <img src="${user.photo_url || '/logo-192.png'}" alt="${user.name}" style="width: 65px; height: 65px; border-radius: 50%; object-fit: cover; border: 2px solid var(--primary-color);">
+          <img src="${getSafeImageUrl(user.photo_url || '/logo-192.png')}" alt="${user.name}" style="width: 65px; height: 65px; border-radius: 50%; object-fit: cover; border: 2px solid var(--primary-color);">
           <span style="position: absolute; bottom: 2px; right: 2px; width: 14px; height: 14px; background: ${statusColor}; border: 2px solid var(--card-bg); border-radius: 50%;" title="${statusText}"></span>
         </div>
         <h4 style="font-size: 1rem; font-weight: 700; color: var(--text-light); margin: 4px 0 0 0;">${user.name}</h4>
