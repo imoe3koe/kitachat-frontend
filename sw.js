@@ -10,7 +10,25 @@ self.addEventListener('activate', event => {
   event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => ![CACHE_VERSION, RUNTIME_CACHE].includes(key)).map(key => caches.delete(key)))).then(() => self.clients.claim()));
 });
 
-function isBypass(url) { return ['/api/', '/socket.io/', '/uploads/'].some(prefix => url.pathname.startsWith(prefix)); }
+function isBypass(url) {
+
+  return [
+    '/api/',
+    '/socket.io/',
+    '/uploads/'
+  ].some(prefix =>
+    url.pathname.startsWith(prefix)
+  )
+
+  ||
+
+  url.protocol === 'ws:'
+
+  ||
+
+  url.protocol === 'wss:';
+}
+
 function cacheable(response) {
   const control = response?.headers.get('Cache-Control') || '';
   return Boolean(response?.ok && response.type === 'basic') && !/no-store|private/i.test(control);
@@ -46,38 +64,120 @@ self.addEventListener('message', event => {
   if (event.data?.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
+self.addEventListener(
+  'notificationclose',
+  event => {
+
+    console.log(
+      '[PWA] Notification closed'
+    );
+
+  }
+);
+
+
 // ==========================================
 // TAMBAHAN: WEB PUSH NOTIFICATION HANDLER
 // ==========================================
 
 self.addEventListener('push', event => {
-  const data = event.data ? event.data.json() : { title: 'Kitachat Family', body: 'Ada pesan baru untuk keluarga!' };
-  
+
+  let data = {
+    title: 'Kitachat Family',
+    body: 'Ada aktivitas baru',
+    url: '/'
+  };
+
+  try {
+    if (event.data) {
+      data = event.data.json();
+    }
+  } catch (e) {
+    console.warn('Push payload invalid');
+  }
+
+  const isIncomingCall =
+    data.type === 'incoming_call';
+
   const options = {
     body: data.body,
-    icon: '/manifest.json' in self ? '/manifest.json' : undefined, // Atau sesuaikan path ikon Anda
-    badge: '/manifest.json' in self ? '/manifest.json' : undefined,
-    data: { url: data.url || '/' }
+    icon: '/logo-192.png',
+    badge: '/logo-192.png',
+
+    tag: isIncomingCall
+      ? `call-${data.callId || Date.now()}`
+      : 'chat-message',
+
+    renotify: true,
+
+    requireInteraction: isIncomingCall,
+
+    vibrate: isIncomingCall
+      ? [300, 200, 300, 200, 300]
+      : [150, 50, 150],
+
+    data: {
+      url: data.url || '/',
+      callId: data.callId || null,
+      type: data.type || 'message'
+    }
   };
 
   event.waitUntil(
-    self.registration.showNotification(data.title, options)
-  );
-});
+    self.registration.showNotification(
+      data.title,
+      options
 
-self.addEventListener('notificationclick', event => {
-  event.notification.close();
-  
-  event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(windowClients => {
-      for (let client of windowClients) {
-        if (client.url === event.notification.data.url && 'focus' in client) {
-          return client.focus();
+self.addEventListener(
+  'pushsubscriptionchange',
+  event => {
+
+    console.log(
+      '[PWA] Push subscription changed'
+    );
+
+  }
+);
+ 
+
+self.addEventListener(
+  'notificationclick',
+  event => {
+
+    event.notification.close();
+
+    const targetUrl =
+      event.notification.data?.url || '/';
+
+    event.waitUntil(
+      clients.matchAll({
+        type: 'window',
+        includeUncontrolled: true
+      })
+      .then(clientList => {
+
+        for (const client of clientList) {
+
+          if ('focus' in client) {
+
+            client.postMessage({
+              type: 'NOTIFICATION_CLICK',
+              notificationType:
+                event.notification.data?.type,
+              callId:
+                event.notification.data?.callId
+            });
+
+            return client.focus();
+          }
         }
-      }
-      if (clients.openWindow) {
-        return clients.openWindow(event.notification.data.url);
-      }
-    })
-  );
-});
+
+        if (clients.openWindow) {
+          return clients.openWindow(targetUrl);
+        }
+
+      })
+    );
+    
+  }
+);
