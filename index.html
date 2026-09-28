@@ -974,7 +974,7 @@
         aria-hidden="true"
         aria-labelledby="call-status-title"
       >
-        <div class="modal-card call-card">
+        <div class="modal-card call-card" style="text-align: center; display: flex; flex-direction: column; align-items: center;">
           <i
             class="fa-solid fa-phone-volume call-icon"
             aria-hidden="true"
@@ -983,17 +983,19 @@
           <h2 id="call-status-title">Memanggil...</h2>
           <p id="call-peer-name">Nama Anggota Keluarga</p>
 
-          <button
-            type="button"
-            id="btn-accept-call"
-            class="btn-success"
-            onclick="acceptCall()"
-            hidden
-            autocomplete="off"
-          >
-            <i class="fa-solid fa-check" aria-hidden="true"></i>
-            Terima
-          </button>
+          <!-- Kontainer Tombol agar posisinya di tengah dan sejajar -->
+          <div style="display: flex; gap: 12px; justify-content: center; align-items: center; margin-top: 15px; width: 100%;">
+            <button
+              type="button"
+              id="btn-accept-call"
+              class="btn-success"
+              onclick="acceptCall()"
+              hidden
+              autocomplete="off"
+            >
+              <i class="fa-solid fa-check" aria-hidden="true"></i>
+              Terima
+            </button>
 
             <button
               type="button"
