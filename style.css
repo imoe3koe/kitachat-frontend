@@ -347,6 +347,14 @@ form input:focus {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  
+  /* Tambahan agar scrollbar tersembunyi secara visual (Estetika WhatsApp Style) */
+  scrollbar-width: none; /* Untuk Firefox */
+}
+
+/* Untuk Chrome, Safari, dan Edge */
+.tab-scroll-content::-webkit-scrollbar {
+  display: none;
 }
 
 .chat-header {
