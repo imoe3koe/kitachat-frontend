@@ -1,5 +1,5 @@
-const CACHE_VERSION = 'kitachat-pwa-v13';
-const RUNTIME_CACHE = 'kitachat-runtime-v13';
+const CACHE_VERSION = 'kitachat-pwa-v14';
+const RUNTIME_CACHE = 'kitachat-runtime-v14';
 const APP_SHELL = ['/', '/index.html', '/style.css', '/app.js', '/album-upload.js', '/ui-helpers.js', '/manifest.json'];
 
 self.addEventListener('install', event => {
@@ -101,6 +101,7 @@ self.addEventListener('push', event => {
 
   const options = {
     body: data.body,
+
     icon: '/logo-192.png',
     badge: '/logo-192.png',
 
@@ -110,7 +111,8 @@ self.addEventListener('push', event => {
 
     renotify: true,
 
-    requireInteraction: isIncomingCall,
+    requireInteraction:
+      isIncomingCall,
 
     vibrate: isIncomingCall
       ? [300, 200, 300, 200, 300]
@@ -127,6 +129,10 @@ self.addEventListener('push', event => {
     self.registration.showNotification(
       data.title,
       options
+    )
+  );
+
+});
 
 self.addEventListener(
   'pushsubscriptionchange',
@@ -138,46 +144,33 @@ self.addEventListener(
 
   }
 );
- 
 
-self.addEventListener(
-  'notificationclick',
-  event => {
+  self.addEventListener('notificationclick', event => {
+  event.notification.close();
 
-    event.notification.close();
+  const targetUrl = event.notification.data?.url || '/';
 
-    const targetUrl =
-      event.notification.data?.url || '/';
+  event.waitUntil(
+    clients.matchAll({
+      type: 'window',
+      includeUncontrolled: true
+    })
+    .then(clientList => {
+      for (const client of clientList) {
+        if ('focus' in client) {
+          client.postMessage({
+            type: 'NOTIFICATION_CLICK',
+            notificationType: event.notification.data?.type,
+            callId: event.notification.data?.callId
+          });
 
-    event.waitUntil(
-      clients.matchAll({
-        type: 'window',
-        includeUncontrolled: true
-      })
-      .then(clientList => {
-
-        for (const client of clientList) {
-
-          if ('focus' in client) {
-
-            client.postMessage({
-              type: 'NOTIFICATION_CLICK',
-              notificationType:
-                event.notification.data?.type,
-              callId:
-                event.notification.data?.callId
-            });
-
-            return client.focus();
-          }
+          return client.focus();
         }
+      }
 
-        if (clients.openWindow) {
-          return clients.openWindow(targetUrl);
-        }
-
-      })
-    );
-    
-  }
-);
+      if (clients.openWindow) {
+        return clients.openWindow(targetUrl);
+      }
+    })
+  );
+});

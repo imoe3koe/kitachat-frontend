@@ -57,6 +57,8 @@ const pendingIceByCallId = new Map();
 const chatBeepAudio = new Audio('/audio/chat-beep.mp3');
 const callRingtone = new Audio('/audio/nadadering-phone.mp3');
 callRingtone.loop = true;
+callRingtone.preload = 'auto';
+callRingtone.playsInline = true;
 
 window.replyingToMessageId = null;
 let deferredPrompt = null;
@@ -233,14 +235,19 @@ function createSocket() {
     : 'https://kitachat-production.up.railway.app';
 
   const client = io(socketEndpoint, {
-    auth: {
-      userId: String(userId),
-      sessionToken: token
-    },
-    reconnection: true,
-    reconnectionAttempts: 5,
-    timeout: 10000
-  });
+  auth: {
+    userId: String(userId),
+    sessionToken: token
+  },
+
+  reconnection: true,
+  reconnectionAttempts: 5,
+
+  reconnectionDelay: 1000,
+  reconnectionDelayMax: 5000,
+
+  timeout: 10000
+});
 
   client.on('connect_error', error => {
     console.warn('Socket connect_error:', error.message);
@@ -2007,16 +2014,50 @@ function createPeerConnection(expectedCallId = activeCallId) {
   };
 
   connection.ontrack = event => {
-    const remoteAudio = document.getElementById('remote-audio');
-    if (!remoteAudio || !event.streams?.[0]) return;
 
-    remoteAudio.srcObject = event.streams[0];
-    setCallStatus('Terhubung');
+  const remoteAudio =
+    document.getElementById('remote-audio');
 
-    remoteAudio.play().catch(error => {
-      console.warn('Audio remote belum dapat diputar:', error);
-    });
+  if (
+    !remoteAudio ||
+    !event.streams?.[0]
+  ) {
+    return;
+  }
+
+  remoteAudio.autoplay = true;
+  remoteAudio.playsInline = true;
+
+  remoteAudio.srcObject =
+    event.streams[0];
+
+  setCallStatus('Terhubung');
+
+  const playAudio = async () => {
+
+    try {
+
+      await remoteAudio.play();
+
+    } catch (error) {
+
+      console.warn(
+        'Audio remote belum dapat diputar:',
+        error
+      );
+
+      document.addEventListener(
+        'touchstart',
+        () => {
+          remoteAudio.play().catch(() => {});
+        },
+        { once: true }
+      );
+    }
   };
+
+  playAudio();
+};
 
   connection.oniceconnectionstatechange = () => {
   if (
@@ -2303,9 +2344,13 @@ async function startCall(peerUserId, peerName) {
 
   try {
     stream = await navigator.mediaDevices.getUserMedia({
-      audio: true,
-      video: false
-    });
+  audio: {
+    echoCancellation: true,
+    noiseSuppression: true,
+    autoGainControl: true
+  },
+  video: false
+});
 
     if (activeCallId !== thisCallId) {
       stream.getTracks().forEach(track => track.stop());
@@ -2398,6 +2443,17 @@ function handleIncomingCall(data) {
   callRingtone.play().catch(error => {
     console.warn('Nada dering tidak dapat diputar:', error);
   });
+
+  if (navigator.vibrate) {
+  navigator.vibrate([
+    500,
+    300,
+    500,
+    300,
+    500
+  ]);
+}
+
 }
 
 async function acceptCall() {
@@ -2706,24 +2762,41 @@ window.addEventListener('beforeunload', () => {
   }
 });
 
-document.addEventListener('visibilitychange', () => {
-
-  if (
-    document.visibilityState === 'visible' &&
-    activeCallId
-  ) {
-
-    const remoteAudio =
-      document.getElementById('remote-audio');
+document.addEventListener(
+  'visibilitychange',
+  () => {
 
     if (
-      remoteAudio &&
-      remoteAudio.srcObject
+      document.visibilityState === 'visible' &&
+      activeCallId
     ) {
-      remoteAudio.play().catch(() => {});
+
+      const remoteAudio =
+        document.getElementById(
+          'remote-audio'
+        );
+
+      if (
+        remoteAudio &&
+        remoteAudio.srcObject
+      ) {
+
+        remoteAudio
+          .play()
+          .catch(() => {});
+      }
+
+      if (
+        peerConnection &&
+        peerConnection.connectionState ===
+          'connected'
+      ) {
+
+        setCallStatus('Terhubung');
+      }
     }
   }
-});
+);
 
 
 // ==========================================================
