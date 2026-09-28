@@ -34,8 +34,8 @@
     rel="stylesheet"
     href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
   >
-  <!-- CDN Supabase JS Client wajib dimuat sebelum app.js -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+  <!-- Pustaka Socket.IO CDN utama -->
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 </head>
 
 <body class="light-mode">
@@ -1243,10 +1243,8 @@
     }
   </script>
 
-  <!-- Script harus dimuat berurutan -->
-  <script src="/socket.io/socket.io.js" defer></script>
-  <!-- Ubah baris ini di index.html -->
-<script src="/app.js?v=2.0"></script>
+  <!-- Script aplikasi utama dengan cache-busting -->
+  <script src="/app.js?v=2.0"></script>
   <script src="/ui-helpers.js" defer></script>
 </body>
 </html>
