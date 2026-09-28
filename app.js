@@ -845,14 +845,15 @@ function renderIncomingMessage(message, silent = false) {
   if (message.message && message.message.trim() !== '') {
     const text = document.createElement('div');
     text.className = 'chat-text';
-    text.textContent = message.message;
+    // Menggunakan innerHTML agar tag <a> dari linkifyText terbaca
+    text.innerHTML = linkifyText(message.message);
     bubble.appendChild(text);
   }
 
   if (message.reply_to_id && message.reply_text) {
     const reply = document.createElement('div');
     reply.className = 'chat-reply';
-    reply.textContent = `Balasan: ${message.reply_text}`;
+    reply.innerHTML = `Balasan: ${linkifyText(message.reply_text)}`;
     bubble.appendChild(reply);
   }
   
@@ -1182,6 +1183,55 @@ let globalAlbumData = [];
 let albumRequestId = 0;
 const ALBUM_MAX_FILE_SIZE = 10 * 1024 * 1024;
 
+// Fungsi helper tambahan untuk kompresi gambar agar optimal di ponsel
+function compressImage(file, maxWidth = 1200, quality = 0.75) {
+  return new Promise((resolve, reject) => {
+    if (!file.type.startsWith('image/')) {
+      return resolve(file);
+    }
+
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target.result;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              return reject(new Error('Gagal mengompres gambar.'));
+            }
+            const compressedFile = new File([blob], file.name, {
+              type: 'image/jpeg',
+              lastModified: Date.now(),
+            });
+            resolve(compressedFile);
+          },
+          'image/jpeg',
+          quality
+        );
+      };
+      img.onerror = (error) => reject(error);
+    };
+    reader.onerror = (error) => reject(error);
+  });
+}
+
 function getAlbumElements() {
   return {
     grid: document.getElementById('album-grid-container'),
@@ -1268,6 +1318,7 @@ function renderAlbumGrid(photos) {
     const img = document.createElement('img');
     img.src = getSafeImageUrl(item.image_url);
     img.alt = item.caption || 'Foto';
+    img.loading = 'lazy'; // <-- Penambahan fungsi Lazy Loading untuk performa & kuota data
     img.style.width = '100%';
     img.style.height = '100%';
     img.style.objectFit = 'cover';
@@ -1392,7 +1443,7 @@ async function handleUploadPhoto(event) {
     return;
   }
 
-  const file = fileInput.files[0];
+  let file = fileInput.files[0];
   if (!file.type.startsWith('image/')) {
     alert('File harus berupa gambar.');
     return;
@@ -1403,13 +1454,16 @@ async function handleUploadPhoto(event) {
     return;
   }
 
-  const formData = new FormData();
-  formData.append('image', file);
-  formData.append('caption', captionInput ? captionInput.value : '');
-
   if (submitBtn) submitBtn.disabled = true;
 
   try {
+    // Kompres gambar otomatis sebelum dikirim ke server agar optimal di ponsel
+    file = await compressImage(file, 1200, 0.75);
+
+    const formData = new FormData();
+    formData.append('image', file);
+    formData.append('caption', captionInput ? captionInput.value : '');
+
     const response = await apiFetch('/api/albums', {
       method: 'POST',
       body: formData
