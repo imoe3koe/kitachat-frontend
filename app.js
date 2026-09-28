@@ -32,9 +32,11 @@ function getSafeImageUrl(url) {
 const rtcConfig = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' }
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun3.l.google.com:19302' }
   ],
-  iceCandidatePoolSize: 10
+  iceCandidatePoolSize: 20
 };
 
 let localStream = null;
@@ -45,6 +47,7 @@ let activeCallId = null;
 let iceCandidateQueue = [];
 let incomingOffer = null;
 let acceptingCall = false;
+let disconnectTimer = null;
 
 const MAX_ICE_CANDIDATES = 64;
 const MAX_PENDING_ICE_CALLS = 20;
@@ -2016,71 +2019,241 @@ function createPeerConnection(expectedCallId = activeCallId) {
   };
 
   connection.oniceconnectionstatechange = () => {
-    if (
-      activeCallId !== expectedCallId ||
-      peerConnection !== connection
-    ) {
-      return;
+  if (
+    activeCallId !== expectedCallId ||
+    peerConnection !== connection
+  ) {
+    return;
+  }
+
+  const state = connection.iceConnectionState;
+
+  console.log('[ICE]', state);
+
+  if (
+    state === 'connected' ||
+    state === 'completed'
+  ) {
+    setCallStatus('Terhubung');
+
+    if (disconnectTimer) {
+      clearTimeout(disconnectTimer);
+      disconnectTimer = null;
+    }
+  }
+
+  else if (state === 'disconnected') {
+    setCallStatus('Mencoba menyambungkan ulang...');
+
+    if (disconnectTimer) {
+      clearTimeout(disconnectTimer);
     }
 
-    const state = connection.iceConnectionState;
-    if (state === 'connected' || state === 'completed') {
-      setCallStatus('Terhubung');
-    } else if (state === 'disconnected') {
-      setCallStatus('Koneksi terputus sementara...');
-    } else if (state === 'failed' || state === 'closed') {
-      cleanupCall(false);
+    disconnectTimer = setTimeout(() => {
+      if (
+        peerConnection &&
+        (
+          peerConnection.iceConnectionState === 'disconnected' ||
+          peerConnection.iceConnectionState === 'failed'
+        )
+      ) {
+        cleanupCall(false);
+      }
+    }, 15000);
+  }
+
+  else if (
+    state === 'failed' ||
+    state === 'closed'
+  ) {
+    cleanupCall(false);
+  }
+};
+
+connection.onconnectionstatechange = () => {
+
+  if (
+    activeCallId !== expectedCallId ||
+    peerConnection !== connection
+  ) {
+    return;
+  }
+
+  const state = connection.connectionState;
+
+  console.log('[WebRTC]', state);
+
+  if (state === 'connected') {
+
+    if (disconnectTimer) {
+      clearTimeout(disconnectTimer);
+      disconnectTimer = null;
     }
-  };
+
+    setCallStatus('Terhubung');
+  }
+
+  else if (state === 'disconnected') {
+
+    setCallStatus('Menyambungkan ulang...');
+
+    if (disconnectTimer) {
+      clearTimeout(disconnectTimer);
+    }
+
+    disconnectTimer = setTimeout(() => {
+
+      if (
+        peerConnection &&
+        (
+          peerConnection.connectionState === 'disconnected' ||
+          peerConnection.connectionState === 'failed'
+        )
+      ) {
+        cleanupCall(false);
+      }
+
+    }, 15000);
+  }
+
+  else if (
+    state === 'failed' ||
+    state === 'closed'
+  ) {
+    cleanupCall(false);
+  }
+};
 
   return connection;
 }
 
-function cleanupCall(notifyPeer = false) {
+if (disconnectTimer) {
+  clearTimeout(disconnectTimer);
+  disconnectTimer = null;
+}
+
+async function cleanupCall(notifyPeer = false) {
+  // Simpan state sebelum direset
   const callIdToEnd = activeCallId;
   const peerToNotify = targetUserId;
 
-  if (notifyPeer && callIdToEnd && peerToNotify && currentUser?.id) {
-    void sendCallSignal('end_call', peerToNotify);
+  // Kirim sinyal end_call terlebih dahulu
+  if (
+    notifyPeer &&
+    callIdToEnd &&
+    peerToNotify &&
+    currentUser?.id
+  ) {
+    try {
+      await sendCallSignal('end_call', peerToNotify);
+    } catch (err) {
+      console.error('Gagal mengirim end_call:', err);
+    }
   }
 
-  callRingtone.pause();
-  callRingtone.currentTime = 0;
+  // Stop ringtone
+  try {
+    if (callRingtone) {
+      callRingtone.pause();
+      callRingtone.currentTime = 0;
+    }
+  } catch (e) {
+    console.error(e);
+  }
 
+  // Bersihkan audio remote
   const remoteAudio = document.getElementById('remote-audio');
+
   if (remoteAudio) {
-    remoteAudio.pause();
-    remoteAudio.srcObject = null;
+    try {
+      if (remoteAudio.srcObject) {
+        remoteAudio.srcObject
+          .getTracks()
+          .forEach(track => track.stop());
+      }
+
+      remoteAudio.pause();
+      remoteAudio.srcObject = null;
+      remoteAudio.removeAttribute('src');
+      remoteAudio.load();
+    } catch (e) {
+      console.error(e);
+    }
   }
 
-  const streamToStop = localStream;
-  localStream = null;
-  if (streamToStop) {
-    streamToStop.getTracks().forEach(track => track.stop());
+  // Stop seluruh track lokal (mikrofon)
+  if (localStream) {
+    try {
+      localStream.getTracks().forEach(track => {
+        try {
+          track.stop();
+        } catch (_) {}
+      });
+    } catch (e) {
+      console.error(e);
+    }
+
+    localStream = null;
   }
 
-  const connectionToClose = peerConnection;
-  peerConnection = null;
-  if (connectionToClose) {
-    connectionToClose.close();
+  // Tutup DataChannel jika ada
+  if (window.dataChannel) {
+    try {
+      window.dataChannel.close();
+    } catch (e) {}
+
+    window.dataChannel = null;
   }
 
+  // Tutup PeerConnection
+  if (peerConnection) {
+    try {
+      // Lepas sender terlebih dahulu
+      peerConnection.getSenders().forEach(sender => {
+        try {
+          peerConnection.removeTrack(sender);
+        } catch (_) {}
+      });
+
+      peerConnection.ontrack = null;
+      peerConnection.onicecandidate = null;
+      peerConnection.oniceconnectionstatechange = null;
+      peerConnection.onconnectionstatechange = null;
+      peerConnection.onsignalingstatechange = null;
+
+      peerConnection.close();
+    } catch (e) {
+      console.error(e);
+    }
+
+    peerConnection = null;
+  }
+
+  // Tutup modal
   const modal = document.getElementById('call-modal');
-  if (modal) modal.classList.add('hidden');
+  if (modal) {
+    modal.classList.add('hidden');
+  }
 
+  // Sembunyikan tombol accept
   const acceptBtn = document.getElementById('btn-accept-call');
-  if (acceptBtn) acceptBtn.style.display = 'none';
+  if (acceptBtn) {
+    acceptBtn.style.display = 'none';
+  }
 
+  // Bersihkan ICE khusus call ini
+  if (callIdToEnd) {
+    pendingIceByCallId.delete(String(callIdToEnd));
+  }
+
+  // Reset state global
   targetUserId = null;
   activeCallId = null;
   incomingOffer = null;
   iceCandidateQueue = [];
   acceptingCall = false;
 
-  if (callIdToEnd) {
-    pendingIceByCallId.delete(String(callIdToEnd));
-  }
-  pendingIceByCallId.clear();
+  console.log('Call cleanup completed');
 }
 
 function hangUpCall() {
@@ -2514,6 +2687,44 @@ async function handleUpdateProfile(event) {
     alert('Terjadi kesalahan jaringan.');
   }
 }
+
+window.addEventListener('pagehide', (event) => {
+
+  if (event.persisted) {
+    return;
+  }
+
+  if (activeCallId) {
+    cleanupCall(true);
+  }
+});
+
+window.addEventListener('beforeunload', () => {
+
+  if (activeCallId) {
+    cleanupCall(true);
+  }
+});
+
+document.addEventListener('visibilitychange', () => {
+
+  if (
+    document.visibilityState === 'visible' &&
+    activeCallId
+  ) {
+
+    const remoteAudio =
+      document.getElementById('remote-audio');
+
+    if (
+      remoteAudio &&
+      remoteAudio.srcObject
+    ) {
+      remoteAudio.play().catch(() => {});
+    }
+  }
+});
+
 
 // ==========================================================
 // INITIALIZE
