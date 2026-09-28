@@ -387,6 +387,14 @@ form input:focus {
   flex-direction: column;
   gap: 8px;
   background: var(--bg-light);
+  
+  /* Tambahan agar scrollbar chat tersembunyi secara visual */
+  scrollbar-width: none; /* Untuk Firefox */
+}
+
+/* Untuk Chrome, Safari, dan Edge */
+.chat-messages::-webkit-scrollbar {
+  display: none;
 }
 
 .chat-bubble {
