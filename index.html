@@ -22,6 +22,21 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="format-detection" content="telephone=no">
 
+  <meta
+  name="apple-mobile-web-app-capable"
+  content="yes"
+/>
+
+<meta
+  name="apple-touch-fullscreen"
+  content="yes"
+/>
+
+<meta
+  name="apple-touch-fullscreen"
+  content="yes"
+/>
+
   <link rel="manifest" href="/manifest.json">
   <link rel="stylesheet" href="/style.css">
 
@@ -34,6 +49,19 @@
     rel="stylesheet"
     href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
   >
+
+  <link
+  rel="preload"
+  href="/audio/nadadering-phone.mp3"
+  as="audio"
+/>
+
+<link
+  rel="preload"
+  href="/audio/chat-beep.mp3"
+  as="audio"
+/>
+
   <!-- Pustaka Socket.IO CDN utama -->
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 </head>
@@ -371,7 +399,7 @@
               Kitachat Keluarga
             </h2>
             <div class="chat-header-actions">
-              <button type="button" onclick="openCallMenu()" title="Telepon Keluarga" style="background:transparent; border:none; color:var(--primary-color); font-size:1.2rem; cursor:pointer;">
+              <button type="button" onclick="openCallMenu()" aria-label="Mulai panggilan suara" style="background:transparent; border:none; color:var(--primary-color); font-size:1.2rem; cursor:pointer;">
                 <i class="fa-solid fa-phone" aria-hidden="true"></i>
               </button>
             </div>
@@ -955,13 +983,13 @@
           <h2 id="call-status-title">Memanggil...</h2>
           <p id="call-peer-name">Nama Anggota Keluarga</p>
 
-          <div class="call-actions">
-            <button
+          <button
             type="button"
             id="btn-accept-call"
             class="btn-success"
             onclick="acceptCall()"
             hidden
+            autocomplete="off"
           >
             <i class="fa-solid fa-check" aria-hidden="true"></i>
             Terima
@@ -981,6 +1009,8 @@
             id="remote-audio"
             autoplay
             playsinline
+            webkit-playsinline
+            preload="auto"
           ></audio>
         </div>
       </div>
@@ -1246,5 +1276,29 @@
   <!-- Script aplikasi utama dengan cache-busting -->
   <script src="/app.js?v=2.0"></script>
   <script src="/ui-helpers.js" defer></script>
+
+  <script>
+
+document.addEventListener(
+  'touchstart',
+  () => {
+
+    const audio =
+      document.getElementById(
+        'remote-audio'
+      );
+
+    if (!audio) return;
+
+    audio.play()
+      .then(() => audio.pause())
+      .catch(() => {});
+
+  },
+  { once: true }
+);
+
+</script>
+
 </body>
 </html>
