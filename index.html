@@ -69,183 +69,98 @@
 <body class="light-mode">
   <div id="app-container">
 
-    <!-- =========================
-         AUTHENTICATION
-    ========================== -->
-    <section
-      id="auth-screen"
-      class="screen active"
-      aria-labelledby="app-title"
-    >
-      <div class="auth-card">
-        <h1 id="app-title">
-          <i class="fa-solid fa-comments" aria-hidden="true"></i>
-          Kitachat
-        </h1>
 
-        <p>Hub Keluarga Tercinta</p>
-
-        <div class="tab-buttons" role="tablist" aria-label="Autentikasi">
-          <button
-            type="button"
-            id="tab-login"
-            class="active"
-            role="tab"
-            aria-selected="true"
-            aria-controls="login-form"
-            onclick="switchTab('login')"
-          >
-            Masuk
-          </button>
-
-          <button
-            type="button"
-            id="tab-register"
-            role="tab"
-            aria-selected="false"
-            aria-controls="register-form"
-            onclick="switchTab('register')"
-          >
-            Daftar
-          </button>
-        </div>
-
-        <form
-          id="login-form"
-          onsubmit="handleLogin(event)"
-          autocomplete="on"
-        >
-          <label class="sr-only" for="login-phone">Nomor telepon</label>
-          <input
-            type="tel"
-            id="login-phone"
-            name="phone"
-            inputmode="tel"
-            autocomplete="tel"
-            placeholder="Nomor Telepon"
-            required
-          >
-
-          <label class="sr-only" for="login-password">Password</label>
-          <input
-            type="password"
-            id="login-password"
-            name="password"
-            autocomplete="current-password"
-            placeholder="Password"
-            required
-          >
-
-          <button type="submit" class="btn-primary">
-            Masuk
-          </button>
-        </form>
-
-        <!-- Tambahkan di dalam .auth-card, di bawah elemen form atau pesan -->
-        <div style="text-align: center; margin-top: 25px; padding-top: 15px; border-top: 1px solid var(--border-color, #e2e8f0);">
-          <small style="font-size: 11px; color: var(--text-muted, #94a3b8); letter-spacing: 0.5px;">
-            © 2026 Kitachat • Developed by imoe3koe
-          </small>
-        </div>
-
-        <div
-          id="forgot-password-btn"
-          class="hidden"
-          style="margin-top: 15px; text-align: center;"
-        >
-          <p style="font-size: 13px; color: #e74c3c;">
-            Gagal login 3 kali. Lupa password?
-          </p>
-
-          <button
-            type="button"
-            onclick="requestOTP()"
-            style="background: none; border: none; color: var(--primary-color); font-weight: bold; cursor: pointer; font-size: 14px;"
-          >
-            <i class="fa-solid fa-key" aria-hidden="true"></i>
-            Reset Password
-          </button>
-        </div>
-
-        <form
-          id="register-form"
-          class="hidden"
-          onsubmit="handleRegister(event)"
-          autocomplete="on"
-        >
-          <!-- Pilihan Sistem Keluarga yang Disesuaikan -->
-          <div class="family-reg-options" style="margin-bottom: 15px; display: flex; gap: 10px; background: var(--bg-color, #f8f9fa); padding: 6px; border: 1px solid var(--border-color, #e2e8f0); border-radius: 10px;">
-            <label style="flex: 1; font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; font-weight: 600; padding: 10px; border-radius: 8px; transition: all 0.2s; color: var(--text-light, #1e293b);">
-              <input type="radio" name="register_type" value="create" checked onclick="toggleInviteCodeInput('create')" style="accent-color: var(--primary-color, #00a884);">
-              Buat Keluarga
-            </label>
-            <label style="flex: 1; font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; font-weight: 600; padding: 10px; border-radius: 8px; transition: all 0.2s; color: var(--text-light, #1e293b);">
-              <input type="radio" name="register_type" value="join" onclick="toggleInviteCodeInput('join')" style="accent-color: var(--primary-color, #00a884);">
-              Gabung Keluarga
-            </label>
-          </div>
-
-          <!-- Input Kode Undangan -->
-          <div id="invite-code-container" class="hidden" style="margin-bottom: 12px;">
-            <label class="sr-only" for="reg-invite-code">Kode Undangan Keluarga</label>
-            <input
-              type="text"
-              id="reg-invite-code"
-              name="invite_code"
-              placeholder="KODE UNDANGAN (Cth: KITA-XXXX)"
-              style="text-transform: uppercase; letter-spacing: 1px; font-weight: 600;"
-            >
-          </div>
-
-          <label class="sr-only" for="reg-name">Nama lengkap</label>
-          <input
-            type="text"
-            id="reg-name"
-            name="name"
-            autocomplete="name"
-            maxlength="100"
-            placeholder="Nama Lengkap"
-            required
-          >
-
-          <label class="sr-only" for="reg-phone">Nomor telepon</label>
-          <input
-            type="tel"
-            id="reg-phone"
-            name="phone"
-            inputmode="tel"
-            autocomplete="tel"
-            placeholder="Nomor Telepon"
-            required
-          >
-
-          <label class="sr-only" for="reg-password">Password</label>
-          <input
-            type="password"
-            id="reg-password"
-            name="password"
-            autocomplete="new-password"
-            minlength="8"
-            placeholder="Password minimal 8 karakter"
-            required
-          >
-
-          <label class="sr-only" for="reg-birthdate">Tanggal lahir</label>
-          <input
-            type="date"
-            id="reg-birthdate"
-            name="birthdate"
-            autocomplete="bday"
-          >
-
-          <button type="submit" class="btn-primary">
-            Daftar Sekarang
-          </button>
-        </form>
-
-        <p id="auth-message" role="status" aria-live="polite"></p>
+    
+<!-- ========================= AUTHENTICATION ========================== -->
+<section id="auth-screen" class="screen active" aria-labelledby="app-title">
+  <div class="auth-card">
+    
+    <!-- Header / Branding WhatsApp Style -->
+    <div class="auth-header" style="text-align: center; margin-bottom: 24px;">
+      <div style="width: 64px; height: 64px; background: #00a884; color: #ffffff; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 12px; font-size: 28px; box-shadow: 0 4px 10px rgba(0, 168, 132, 0.3);">
+        <i class="fa-solid fa-comments" aria-hidden="true"></i>
       </div>
-    </section>
+      <h1 id="app-title" style="font-size: 24px; font-weight: 700; color: var(--text-color, #111b21); margin: 0 0 4px 0;">Kitachat</h1>
+      <p style="font-size: 14px; color: var(--text-muted, #667781); margin: 0;">Hub Keluarga Tercinta</p>
+    </div>
+
+    <!-- Tab Navigation WhatsApp Style -->
+    <div class="tab-buttons" role="tablist" aria-label="Autentikasi" style="display: flex; background: var(--bg-secondary, #f0f2f5); padding: 4px; border-radius: 12px; margin-bottom: 20px;">
+      <button type="button" id="tab-login" class="active" role="tab" aria-selected="true" aria-controls="login-form" onclick="switchTab('login')" style="flex: 1; padding: 10px; border: none; background: transparent; font-weight: 600; font-size: 14px; border-radius: 8px; cursor: pointer; transition: all 0.2s;">
+        Masuk
+      </button>
+      <button type="button" id="tab-register" role="tab" aria-selected="false" aria-controls="register-form" onclick="switchTab('register')" style="flex: 1; padding: 10px; border: none; background: transparent; font-weight: 600; font-size: 14px; border-radius: 8px; cursor: pointer; transition: all 0.2s;">
+        Daftar
+      </button>
+    </div>
+
+    <!-- Login Form -->
+    <form id="login-form" onsubmit="handleLogin(event)" autocomplete="on">
+      <label class="sr-only" for="login-phone">Nomor telepon</label>
+      <input type="tel" id="login-phone" name="phone" inputmode="tel" autocomplete="tel" placeholder="Nomor Telepon" required>
+      
+      <label class="sr-only" for="login-password">Password</label>
+      <input type="password" id="login-password" name="password" autocomplete="current-password" placeholder="Password" required>
+      
+      <button type="submit" class="btn-primary">
+        Masuk
+      </button>
+    </form>
+
+    <!-- Forgot Password Section -->
+    <div id="forgot-password-btn" class="hidden" style="margin-top: 15px; text-align: center;">
+      <p style="font-size: 13px; color: #e74c3c; margin-bottom: 6px;">Gagal login 3 kali. Lupa password?</p>
+      <button type="button" onclick="requestOTP()" style="background: none; border: none; color: var(--primary-color, #00a884); font-weight: bold; cursor: pointer; font-size: 14px;">
+        <i class="fa-solid fa-key" aria-hidden="true"></i> Reset Password
+      </button>
+    </div>
+
+    <!-- Register Form -->
+    <form id="register-form" class="hidden" onsubmit="handleRegister(event)" autocomplete="on">
+      <!-- Pilihan Sistem Keluarga yang Disesuaikan -->
+      <div class="family-reg-options" style="margin-bottom: 15px; display: flex; gap: 10px; background: var(--bg-color, #f8f9fa); padding: 6px; border: 1px solid var(--border-color, #e2e8f0); border-radius: 10px;">
+        <label style="flex: 1; font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; font-weight: 600; padding: 10px; border-radius: 8px; transition: all 0.2s; color: var(--text-light, #1e293b);">
+          <input type="radio" name="register_type" value="create" checked onclick="toggleInviteCodeInput('create')" style="accent-color: var(--primary-color, #00a884);"> Buat Keluarga
+        </label>
+        <label style="flex: 1; font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; font-weight: 600; padding: 10px; border-radius: 8px; transition: all 0.2s; color: var(--text-light, #1e293b);">
+          <input type="radio" name="register_type" value="join" onclick="toggleInviteCodeInput('join')" style="accent-color: var(--primary-color, #00a884);"> Gabung Keluarga
+        </label>
+      </div>
+
+      <!-- Input Kode Undangan -->
+      <div id="invite-code-container" class="hidden" style="margin-bottom: 12px;">
+        <label class="sr-only" for="reg-invite-code">Kode Undangan Keluarga</label>
+        <input type="text" id="reg-invite-code" name="invite_code" placeholder="KODE UNDANGAN (Cth: KITA-XXXX)" style="text-transform: uppercase; letter-spacing: 1px; font-weight: 600;">
+      </div>
+
+      <label class="sr-only" for="reg-name">Nama lengkap</label>
+      <input type="text" id="reg-name" name="name" autocomplete="name" maxlength="100" placeholder="Nama Lengkap" required>
+      
+      <label class="sr-only" for="reg-phone">Nomor telepon</label>
+      <input type="tel" id="reg-phone" name="phone" inputmode="tel" autocomplete="tel" placeholder="Nomor Telepon" required>
+      
+      <label class="sr-only" for="reg-password">Password</label>
+      <input type="password" id="reg-password" name="password" autocomplete="new-password" minlength="8" placeholder="Password minimal 8 karakter" required>
+      
+      <label class="sr-only" for="reg-birthdate">Tanggal lahir</label>
+      <input type="date" id="reg-birthdate" name="birthdate" autocomplete="bday">
+      
+      <button type="submit" class="btn-primary">
+        Daftar Sekarang
+      </button>
+    </form>
+
+    <!-- Footer Copyright -->
+    <div style="text-align: center; margin-top: 25px; padding-top: 15px; border-top: 1px solid var(--border-color, #e2e8f0);">
+      <small style="font-size: 11px; color: var(--text-muted, #94a3b8); letter-spacing: 0.5px;">
+        © 2026 Kitachat • Developed by imoe3koe
+      </small>
+    </div>
+
+    <p id="auth-message" role="status" aria-live="polite" style="margin-top: 10px; text-align: center; font-size: 13px;"></p>
+  </div>
+</section>
+
 
     <!-- =========================
          MAIN APPLICATION
