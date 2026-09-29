@@ -358,21 +358,39 @@ async function parseJsonResponse(response) {
 }
 
 async function apiFetch(url, options = {}) {
-  const token = localStorage.getItem(STORAGE_KEYS.token) || '';
+  // 1. Ambil data autentikasi dari localStorage / state
+  const token = localStorage.getItem(STORAGE_KEYS?.token) || '';
   const userId = currentUser ? String(currentUser.id) : '';
 
-  const headers = new Headers(options.headers || {});
+  // 2. Pisahkan headers bawaan dari options lainnya
+  const { headers: customHeaders, ...remainingOptions } = options;
+
+  // 3. Inisialisasi objek Headers bawaan browser
+  const headers = new Headers(customHeaders || {});
+
+  // 4. Set custom headers untuk kebutuhan tracking/autentikasi backend
   if (userId) headers.set('x-user-id', userId);
   if (token) headers.set('x-session-token', token);
-
-  const requestOptions = {
-    ...options,
-    headers
-  };
-
-  if (requestOptions.body instanceof FormData) {
-    requestOptions.headers.delete('Content-Type');
+  
+  // Otomatis set Content-Type ke JSON jika mengirimkan body berupa object/array
+  if (remainingOptions.body && typeof remainingOptions.body === 'object' && !(remainingOptions.body instanceof FormData)) {
+    headers.set('Content-Type', 'application/json');
+    remainingOptions.body = JSON.stringify(remainingOptions.body);
   }
+
+  // 5. Gabungkan kembali ke dalam konfigurasi request fetch
+  const requestOptions = {
+    ...remainingOptions,
+    headers: headers // Menggunakan objek Headers yang sudah valid
+  };
+  
+  // Gabungkan url dengan API_BASE_URL (pastikan API_BASE_URL sudah terdefinisi)
+  const fullUrl = url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
+
+  // ... (lanjutan fetch ke API_BASE_URL)
+  return fetch(fullUrl, requestOptions);
+}
+
 
   const targetUrl = url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
 
