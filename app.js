@@ -556,7 +556,7 @@ function toggleTheme() {
 }
 
 // ==========================================================
-// UI HELPERS & NAVIGATION
+// UI HELPERS & NAVIGATION (OPTIMIZED FOR FAMILY LOCATION)
 // ==========================================================
 function showAuthScreen() {
   const authScreen = document.getElementById('auth-screen');
@@ -609,7 +609,8 @@ function switchTab(tab) {
   }
 }
 
-function switchTabNav(tabName, buttonElement) {
+// Dioptimalkan menjadi async agar sinkronisasi GPS selesai dulu sebelum load data keluarga
+async function switchTabNav(tabName, buttonElement) {
   const contents = document.querySelectorAll('.tab-content');
   contents.forEach(content => {
     content.classList.remove('active');
@@ -640,6 +641,12 @@ function switchTabNav(tabName, buttonElement) {
   } else if (tabName === 'agenda') {
     loadAgendaAndBirthdays();
   } else if (tabName === 'family') {
+    // OPTIMASI: Tunggu hingga update GPS selesai dikirim ke database, baru muat daftar anggota
+    const familyContainer = document.getElementById('family-list-container');
+    if (familyContainer) {
+      familyContainer.innerHTML = '<p style="color: gray; text-align: center; grid-column: span 3; padding: 20px;">Menyinkronkan lokasi GPS...</p>';
+    }
+    await updateMyCurrentLocation(); 
     loadFamilyMembers();
   } else if (tabName === 'chat') {
     void loadChatHistoryRest();
@@ -686,6 +693,9 @@ function updateUserInterface() {
 
   showMainScreen();
   void loadChatHistoryRest();
+
+  // OPTIMASI TAMBAHAN: Langsung rekam koordinat GPS di latar belakang begitu pengguna sukses login
+  updateMyCurrentLocation();
 }
 
 // ==========================================================
@@ -1843,48 +1853,58 @@ async function loadFamilyMembers() {
 }
 
 // ==========================================================
-// FITUR LOKASI KELUARGA & TOMBOL SOS DARURAT
+// FITUR LOKASI KELUARGA & TOMBOL SOS DARURAT (OPTIMIZED)
 // ==========================================================
 
 let latestUserCoords = { latitude: null, longitude: null };
 
-// Perbarui dan simpan koordinat GPS pengguna
+// Perbarui dan simpan koordinat GPS pengguna (Diubah menjadi Promise agar bisa di-await)
 function updateMyCurrentLocation() {
   if (!navigator.geolocation) {
-    alert('Browser Anda tidak mendukung layanan lokasi GPS.');
-    return;
+    return Promise.resolve(false);
   }
   
-  navigator.geolocation.getCurrentPosition(async (position) => {
-    latestUserCoords.latitude = position.coords.latitude;
-    latestUserCoords.longitude = position.coords.longitude;
-    
-    try {
-      const res = await apiFetch('/api/update-location', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          latitude: latestUserCoords.latitude, 
-          longitude: latestUserCoords.longitude 
-        })
-      });
-      if (res.ok) {
-        console.log('Koordinat GPS berhasil disinkronkan ke database.');
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(async (position) => {
+      latestUserCoords.latitude = position.coords.latitude;
+      latestUserCoords.longitude = position.coords.longitude;
+      
+      try {
+        const response = await apiFetch('/api/update-location', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            latitude: latestUserCoords.latitude, 
+            longitude: latestUserCoords.longitude 
+          })
+        });
+        
+        if (response.ok) {
+          // Jika tab keluarga sedang aktif, muat ulang daftar anggota secara real-time
+          const familyTab = document.getElementById('content-family');
+          if (familyTab && familyTab.classList.contains('active')) {
+            loadFamilyMembers();
+          }
+          resolve(true);
+        } else {
+          resolve(false);
+        }
+      } catch (err) {
+        console.warn('Gagal menyinkronkan koordinat lokasi:', err);
+        resolve(false);
       }
-    } catch (err) {
-      console.warn('Gagal menyinkronkan koordinat lokasi:', err);
-    }
-  }, (error) => {
-    console.warn('Gagal mendeteksi GPS:', error.message);
-    if (error.code === error.PERMISSION_DENIED) {
-      alert('Izin akses lokasi ditolak oleh browser. Mohon aktifkan izin lokasi pada pengaturan browser Anda.');
-    } else if (error.code === error.TIMEOUT) {
-      alert('Waktu permintaan lokasi habis (Timeout). Pastikan sinyal atau layanan GPS aktif.');
-    }
-  }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
+    }, (error) => {
+      console.warn('Izin lokasi GPS tidak diberikan atau gagal:', error.message);
+      resolve(false);
+    }, { 
+      enableHighAccuracy: true, 
+      timeout: 8000, 
+      maximumAge: 0 
+    });
+  });
 }
 
-// Buka Modal Lokasi Keluarga (Dioptimalkan agar menunggu sinkronisasi GPS)
+// Buka Modal Lokasi Keluarga (Menggunakan ulang updateMyCurrentLocation agar tidak ada duplikasi)
 async function openFamilyLocationModal() {
   const modal = document.getElementById('family-location-modal');
   const container = document.getElementById('family-location-container');
@@ -1894,33 +1914,9 @@ async function openFamilyLocationModal() {
   modal.classList.remove('hidden');
   container.innerHTML = '<p style="text-align: center; color: var(--text-muted); padding: 20px;">Mengambil posisi GPS terkini...</p>';
 
-  // Panggil fungsi pembaruan lokasi dan tunggu hingga selesai/timeout
-  await new Promise((resolve) => {
-    if (!navigator.geolocation) {
-      resolve();
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(async (position) => {
-      const { latitude, longitude } = position.coords;
-      latestUserCoords.latitude = latitude;
-      latestUserCoords.longitude = longitude;
-      try {
-        await apiFetch('/api/update-location', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ latitude, longitude })
-        });
-      } catch (err) {
-        console.warn('Gagal menyinkronkan koordinat:', err);
-      }
-      resolve();
-    }, (error) => {
-      console.warn('Izin GPS ditolak/gagal:', error.message);
-      resolve();
-    }, { enableHighAccuracy: true, timeout: 5000 });
-  });
+  // Panggil pembaruan lokasi dan tunggu hingga proses sinkronisasi database selesai
+  await updateMyCurrentLocation();
 
-  // Setelah koordinat terkirim, muat daftar anggota keluarga
   container.innerHTML = '<p style="text-align: center; color: var(--text-muted); padding: 20px;">Memuat data lokasi keluarga...</p>';
 
   try {
@@ -1977,6 +1973,11 @@ function closeFamilyLocationModal() {
 async function triggerSOSAlert() {
   if (!confirm('PERHATIAN: Kirim sinyal darurat SOS ke seluruh anggota keluarga sekarang?')) return;
 
+  // Coba ambil posisi terbaru sesaat sebelum mengirim SOS jika koordinat masih kosong
+  if (!latestUserCoords.latitude || !latestUserCoords.longitude) {
+    await updateMyCurrentLocation();
+  }
+
   const lat = latestUserCoords.latitude;
   const lng = latestUserCoords.longitude;
   
@@ -1996,7 +1997,6 @@ async function triggerSOSAlert() {
     if (response.ok) {
       alert('Sinyal SOS berhasil dikirim ke obrolan keluarga!');
       closeFamilyLocationModal();
-      // Pindah otomatis ke tab chat agar pengguna bisa melihat pesan SOS terkirim
       switchTabNav('chat', document.querySelector('[data-tab="chat"]'));
     } else {
       alert('Gagal mengirim sinyal SOS.');
