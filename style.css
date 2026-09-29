@@ -235,6 +235,48 @@ form input:focus {
   flex: 1;
 }
 
+
+/* =========================
+   PERBAIKAN POSISI PILIHAN BUAT / GABUNG
+========================= */
+
+/* Kontainer utama pilihan registrasi */
+#register-form div:has(input[name="register_type"]),
+.register-type-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 30px;
+  padding: 10px;
+  background: var(--bg-soft);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  width: 100%;
+}
+
+/* Mengatur label agar teks berada di bawah lingkaran pilihan */
+#register-form label:has(input[name="register_type"]),
+.register-type-option {
+  display: flex;
+  flex-direction: column; /* Membuat susunan ke bawah (stacked) */
+  align-items: center;
+  text-align: center;
+  font-size: 0.78rem;     /* Ukuran font diperkecil */
+  color: var(--text-light);
+  cursor: pointer;
+  gap: 4px;               /* Jarak antara lingkaran dan teks */
+}
+
+/* Memastikan ukuran radio button proporsional */
+#register-form input[name="register_type"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--primary-color);
+  cursor: pointer;
+}
+
+
 /* =========================
    MAIN SCREEN & LAYOUT
 ========================= */
