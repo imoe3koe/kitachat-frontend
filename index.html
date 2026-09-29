@@ -948,6 +948,40 @@
           </div>
         </div>
       </div>
+
+
+      <!-- Modal Popup Lokasi Anggota Keluarga & SOS -->
+      <div id="family-location-modal" class="modal-overlay hidden">
+        <div class="modal-card" style="max-width: 480px; width: 92%; max-height: 85vh; display: flex; flex-direction: column; text-align: left; overflow: hidden;">
+          
+          <!-- Header Modal -->
+          <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-bottom: 12px; flex-shrink: 0;">
+            <h2 style="font-size: 1.1rem; display: flex; align-items: center; gap: 8px; margin: 0; color: var(--text-light);">
+              <i class="fa-solid fa-map-location-dot" style="color: var(--primary-color);"></i> Lokasi & Darurat Keluarga
+            </h2>
+            <button type="button" onclick="closeFamilyLocationModal()" style="background: transparent; border: none; font-size: 1.2rem; cursor: pointer; color: var(--text-muted);">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+          
+          <p class="modal-help-text" style="margin-bottom: 12px; flex-shrink: 0;">Pantau posisi terkini anggota keluarga atau gunakan tombol SOS jika terjadi keadaan darurat.</p>
+          
+          <!-- Tombol SOS Darurat -->
+          <div style="margin-bottom: 12px; flex-shrink: 0;">
+            <button type="button" onclick="triggerSOSAlert()" class="btn-danger" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px; font-weight: 700; border-radius: 8px; font-size: 0.95rem; animation: pulse-sos 2s infinite;">
+              <i class="fa-solid fa-triangle-exclamation"></i> KIRIM SINYAL SOS DARURAT
+            </button>
+          </div>
+
+          <!-- Kontainer Daftar Lokasi Keluarga (Dapat beradaptasi & scroll otomatis jika banyak) -->
+          <div id="family-location-container" style="display: flex; flex-direction: column; gap: 10px; overflow-y: auto; padding-right: 4px; max-height: 50vh; flex: 1;">
+            <!-- Data dimuat secara dinamis via JavaScript -->
+          </div>
+          
+          <button type="button" class="btn-secondary" onclick="closeFamilyLocationModal()" style="margin-top: 15px; width: 100%; flex-shrink: 0;">Tutup</button>
+        </div>
+      </div>
+
       
       <!-- =========================
            PASSWORD MODAL

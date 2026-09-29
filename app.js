@@ -1843,6 +1843,133 @@ async function loadFamilyMembers() {
 }
 
 // ==========================================================
+// FITUR LOKASI KELUARGA & TOMBOL SOS DARURAT
+// ==========================================================
+
+let latestUserCoords = { latitude: null, longitude: null };
+
+// Perbarui dan simpan koordinat GPS pengguna
+function updateMyCurrentLocation() {
+  if (!navigator.geolocation) return;
+  
+  navigator.geolocation.getCurrentPosition(async (position) => {
+    latestUserCoords.latitude = position.coords.latitude;
+    latestUserCoords.longitude = position.coords.longitude;
+    
+    try {
+      await apiFetch('/api/update-location', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          latitude: latestUserCoords.latitude, 
+          longitude: latestUserCoords.longitude 
+        })
+      });
+    } catch (err) {
+      console.warn('Gagal menyinkronkan koordinat lokasi:', err);
+    }
+  }, (error) => {
+    console.warn('Izin lokasi GPS tidak diberikan:', error.message);
+  }, { enableHighAccuracy: true });
+}
+
+// Buka Modal Lokasi Keluarga
+async function openFamilyLocationModal() {
+  const modal = document.getElementById('family-location-modal');
+  const container = document.getElementById('family-location-container');
+  
+  if (!modal || !container) return;
+  
+  updateMyCurrentLocation();
+  modal.classList.remove('hidden');
+  container.innerHTML = '<p style="text-align: center; color: var(--text-muted); padding: 20px;">Memuat data lokasi keluarga...</p>';
+
+  try {
+    const response = await apiFetch('/api/users');
+    if (!response.ok) throw new Error('Gagal mengambil data pengguna.');
+
+    const users = await response.json();
+    container.replaceChildren();
+
+    if (!Array.isArray(users) || users.length === 0) {
+      container.innerHTML = '<p style="text-align: center; color: var(--text-muted);">Tidak ada anggota keluarga ditemukan.</p>';
+      return;
+    }
+
+    users.forEach(user => {
+      const card = document.createElement('div');
+      card.className = 'location-member-card';
+
+      const avatarSrc = user.photo_url ? getSafeImageUrl(user.photo_url) : '/logo-192.png';
+      const hasLocation = user.latitude && user.longitude;
+      const areaAcuan = user.area_name || (hasLocation ? 'Area Terdeteksi (GPS Aktif)' : 'Lokasi belum dibagikan');
+      const coordText = hasLocation ? `${Number(user.latitude).toFixed(5)}, ${Number(user.longitude).toFixed(5)}` : 'Koordinat tidak tersedia';
+
+      card.innerHTML = `
+        <img src="${avatarSrc}" alt="${user.name}">
+        <div class="location-info">
+          <h5>${user.name}</h5>
+          <p><i class="fa-solid fa-location-dot" style="color: var(--danger);"></i> ${areaAcuan}</p>
+          <div class="location-coord-badge">
+            <i class="fa-solid fa-satellite-dish"></i> ${coordText}
+          </div>
+          ${hasLocation ? `
+            <a href="https://maps.google.com/?q=${user.latitude},${user.longitude}" target="_blank" class="map-action-btn">
+              <i class="fa-solid fa-map"></i> Buka di Google Maps
+            </a>
+          ` : ''}
+        </div>
+      `;
+      container.appendChild(card);
+    });
+
+  } catch (error) {
+    console.error('Error memuat lokasi keluarga:', error);
+    container.innerHTML = '<p style="text-align: center; color: var(--danger); padding: 10px;">Gagal memuat informasi lokasi.</p>';
+  }
+}
+
+function closeFamilyLocationModal() {
+  const modal = document.getElementById('family-location-modal');
+  if (modal) modal.classList.add('hidden');
+}
+
+// Fungsi Aksi Tombol SOS Darurat
+async function triggerSOSAlert() {
+  if (!confirm('PERHATIAN: Kirim sinyal darurat SOS ke seluruh anggota keluarga sekarang?')) return;
+
+  const lat = latestUserCoords.latitude;
+  const lng = latestUserCoords.longitude;
+  
+  let mapsLinkText = '';
+  if (lat && lng) {
+    mapsLinkText = ` \nLokasi Saya: https://maps.google.com/?q=${lat},${lng}`;
+  }
+
+  const sosMessage = `🚨 DARURAT (SOS)! Saya membutuhkan bantuan segera!${mapsLinkText}`;
+
+  const formData = new FormData();
+  formData.append('message', sosMessage);
+  formData.append('client_time', new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }));
+
+  try {
+    const response = await apiFetch('/api/send-message', { method: 'POST', body: formData });
+    if (response.ok) {
+      alert('Sinyal SOS berhasil dikirim ke obrolan keluarga!');
+      closeFamilyLocationModal();
+      // Pindah otomatis ke tab chat agar pengguna bisa melihat pesan SOS terkirim
+      switchTabNav('chat', document.querySelector('[data-tab="chat"]'));
+    } else {
+      alert('Gagal mengirim sinyal SOS.');
+    }
+  } catch (err) {
+    console.error('Error SOS:', err);
+    alert('Terjadi kesalahan jaringan saat mengirim SOS.');
+  }
+}
+
+
+// ==========================================================
 // PROFILE / PASSWORD / EMAIL
 // ==========================================================
 async function triggerUploadProfile(inputElement) {
