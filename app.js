@@ -1850,14 +1850,17 @@ let latestUserCoords = { latitude: null, longitude: null };
 
 // Perbarui dan simpan koordinat GPS pengguna
 function updateMyCurrentLocation() {
-  if (!navigator.geolocation) return;
+  if (!navigator.geolocation) {
+    alert('Browser Anda tidak mendukung layanan lokasi GPS.');
+    return;
+  }
   
   navigator.geolocation.getCurrentPosition(async (position) => {
     latestUserCoords.latitude = position.coords.latitude;
     latestUserCoords.longitude = position.coords.longitude;
     
     try {
-      await apiFetch('/api/update-location', {
+      const res = await apiFetch('/api/update-location', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -1865,12 +1868,20 @@ function updateMyCurrentLocation() {
           longitude: latestUserCoords.longitude 
         })
       });
+      if (res.ok) {
+        console.log('Koordinat GPS berhasil disinkronkan ke database.');
+      }
     } catch (err) {
       console.warn('Gagal menyinkronkan koordinat lokasi:', err);
     }
   }, (error) => {
-    console.warn('Izin lokasi GPS tidak diberikan:', error.message);
-  }, { enableHighAccuracy: true });
+    console.warn('Gagal mendeteksi GPS:', error.message);
+    if (error.code === error.PERMISSION_DENIED) {
+      alert('Izin akses lokasi ditolak oleh browser. Mohon aktifkan izin lokasi pada pengaturan browser Anda.');
+    } else if (error.code === error.TIMEOUT) {
+      alert('Waktu permintaan lokasi habis (Timeout). Pastikan sinyal atau layanan GPS aktif.');
+    }
+  }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
 }
 
 // Buka Modal Lokasi Keluarga (Dioptimalkan agar menunggu sinkronisasi GPS)
