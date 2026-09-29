@@ -365,14 +365,14 @@ async function apiFetch(url, options = {}) {
   // 2. Pisahkan headers bawaan dari options lainnya
   const { headers: customHeaders, ...remainingOptions } = options;
 
-  // 3. Inisialisasi objek Headers bawaan browser
+  // 3. Inisialisasi objek Headers bawaan browser secara aman
   const headers = new Headers(customHeaders || {});
 
   // 4. Set custom headers untuk kebutuhan tracking/autentikasi backend
   if (userId) headers.set('x-user-id', userId);
   if (token) headers.set('x-session-token', token);
   
-  // Otomatis set Content-Type ke JSON jika mengirimkan body berupa object/array
+  // Otomatis set Content-Type ke JSON jika mengirimkan body berupa object/array (bukan FormData)
   if (remainingOptions.body && typeof remainingOptions.body === 'object' && !(remainingOptions.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json');
     remainingOptions.body = JSON.stringify(remainingOptions.body);
@@ -381,17 +381,9 @@ async function apiFetch(url, options = {}) {
   // 5. Gabungkan kembali ke dalam konfigurasi request fetch
   const requestOptions = {
     ...remainingOptions,
-    headers: headers // Menggunakan objek Headers yang sudah valid
+    headers: headers
   };
   
-  // Gabungkan url dengan API_BASE_URL (pastikan API_BASE_URL sudah terdefinisi)
-  const fullUrl = url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
-
-  // ... (lanjutan fetch ke API_BASE_URL)
-  return fetch(fullUrl, requestOptions);
-}
-
-
   const targetUrl = url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
 
   let response;
