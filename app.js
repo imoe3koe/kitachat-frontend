@@ -1873,15 +1873,43 @@ function updateMyCurrentLocation() {
   }, { enableHighAccuracy: true });
 }
 
-// Buka Modal Lokasi Keluarga
+// Buka Modal Lokasi Keluarga (Dioptimalkan agar menunggu sinkronisasi GPS)
 async function openFamilyLocationModal() {
   const modal = document.getElementById('family-location-modal');
   const container = document.getElementById('family-location-container');
   
   if (!modal || !container) return;
   
-  updateMyCurrentLocation();
   modal.classList.remove('hidden');
+  container.innerHTML = '<p style="text-align: center; color: var(--text-muted); padding: 20px;">Mengambil posisi GPS terkini...</p>';
+
+  // Panggil fungsi pembaruan lokasi dan tunggu hingga selesai/timeout
+  await new Promise((resolve) => {
+    if (!navigator.geolocation) {
+      resolve();
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(async (position) => {
+      const { latitude, longitude } = position.coords;
+      latestUserCoords.latitude = latitude;
+      latestUserCoords.longitude = longitude;
+      try {
+        await apiFetch('/api/update-location', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ latitude, longitude })
+        });
+      } catch (err) {
+        console.warn('Gagal menyinkronkan koordinat:', err);
+      }
+      resolve();
+    }, (error) => {
+      console.warn('Izin GPS ditolak/gagal:', error.message);
+      resolve();
+    }, { enableHighAccuracy: true, timeout: 5000 });
+  });
+
+  // Setelah koordinat terkirim, muat daftar anggota keluarga
   container.innerHTML = '<p style="text-align: center; color: var(--text-muted); padding: 20px;">Memuat data lokasi keluarga...</p>';
 
   try {
