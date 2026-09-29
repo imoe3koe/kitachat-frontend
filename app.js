@@ -27,6 +27,23 @@ function getSafeImageUrl(url) {
 }
 
 /* ==========================================================
+   HELPER: LINKIFY TEXT (MENGUBAH URL MENJADI KLIK LINK)
+========================================================== */
+function linkifyText(inputText) {
+  if (!inputText) return '';
+  const escapeHtml = (str) => {
+    return str.replace(/&/g, '&amp;')
+              .replace(/</g, '&lt;')
+              .replace(/>/g, '&gt;')
+              .replace(/"/g, '&quot;')
+              .replace(/'/g, '&#039;');
+  };
+  const safeText = escapeHtml(inputText);
+  const urlRegex = /(\b(https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig;
+  return safeText.replace(urlRegex, '<a href="$1" target="_blank" rel="noopener noreferrer" style="color: var(--primary-color, #00a884); text-decoration: underline;">$1</a>');
+}
+
+/* ==========================================================
    OPTIMASI 1: Perbaikan STUN Server WebRTC yang valid
 ========================================================== */
 const rtcConfig = {
@@ -235,19 +252,16 @@ function createSocket() {
     : 'https://kitachat-production.up.railway.app';
 
   const client = io(socketEndpoint, {
-  auth: {
-    userId: String(userId),
-    sessionToken: token
-  },
-
-  reconnection: true,
-  reconnectionAttempts: 5,
-
-  reconnectionDelay: 1000,
-  reconnectionDelayMax: 5000,
-
-  timeout: 10000
-});
+    auth: {
+      userId: String(userId),
+      sessionToken: token
+    },
+    reconnection: true,
+    reconnectionAttempts: 5,
+    reconnectionDelay: 1000,
+    reconnectionDelayMax: 5000,
+    timeout: 10000
+  });
 
   client.on('connect_error', error => {
     console.warn('Socket connect_error:', error.message);
@@ -268,6 +282,8 @@ function registerSocketEvents() {
 
   socket.on('connect', () => {
     console.log('Socket terhubung:', socket.id);
+    // Muat riwayat chat via REST sebagai cadangan otomatis saat tersambung
+    void loadChatHistoryRest();
   });
 
   socket.on('chat_history', history => {
@@ -327,7 +343,7 @@ function connectAuthenticatedSocket() {
 }
 
 // ==========================================================
-// API HELPERS
+// API HELPERS & REST CHAT LOADER
 // ==========================================================
 async function parseJsonResponse(response) {
   const contentType = response.headers.get('content-type') || '';
@@ -382,6 +398,21 @@ async function apiFetch(url, options = {}) {
   }
 
   return response;
+}
+
+// Fungsi REST Fallback untuk memastikan riwayat chat selalu terambil
+async function loadChatHistoryRest() {
+  try {
+    const response = await apiFetch('/api/messages');
+    if (response.ok) {
+      const history = await response.json();
+      if (Array.isArray(history)) {
+        renderChatHistory(history);
+      }
+    }
+  } catch (error) {
+    console.warn('Gagal memuat riwayat chat via REST:', error);
+  }
 }
 
 // ==========================================================
@@ -610,6 +641,8 @@ function switchTabNav(tabName, buttonElement) {
     loadAgendaAndBirthdays();
   } else if (tabName === 'family') {
     loadFamilyMembers();
+  } else if (tabName === 'chat') {
+    void loadChatHistoryRest();
   }
 }
 
@@ -652,6 +685,7 @@ function updateUserInterface() {
   }
 
   showMainScreen();
+  void loadChatHistoryRest();
 }
 
 // ==========================================================
@@ -845,7 +879,6 @@ function renderIncomingMessage(message, silent = false) {
   if (message.message && message.message.trim() !== '') {
     const text = document.createElement('div');
     text.className = 'chat-text';
-    // Menggunakan innerHTML agar tag <a> dari linkifyText terbaca
     text.innerHTML = linkifyText(message.message);
     bubble.appendChild(text);
   }
@@ -1183,7 +1216,6 @@ let globalAlbumData = [];
 let albumRequestId = 0;
 const ALBUM_MAX_FILE_SIZE = 10 * 1024 * 1024;
 
-// Fungsi helper tambahan untuk kompresi gambar agar optimal di ponsel
 function compressImage(file, maxWidth = 1200, quality = 0.75) {
   return new Promise((resolve, reject) => {
     if (!file.type.startsWith('image/')) {
@@ -1318,7 +1350,7 @@ function renderAlbumGrid(photos) {
     const img = document.createElement('img');
     img.src = getSafeImageUrl(item.image_url);
     img.alt = item.caption || 'Foto';
-    img.loading = 'lazy'; // <-- Penambahan fungsi Lazy Loading untuk performa & kuota data
+    img.loading = 'lazy';
     img.style.width = '100%';
     img.style.height = '100%';
     img.style.objectFit = 'cover';
@@ -1457,7 +1489,6 @@ async function handleUploadPhoto(event) {
   if (submitBtn) submitBtn.disabled = true;
 
   try {
-    // Kompres gambar otomatis sebelum dikirim ke server agar optimal di ponsel
     file = await compressImage(file, 1200, 0.75);
 
     const formData = new FormData();
@@ -2068,156 +2099,77 @@ function createPeerConnection(expectedCallId = activeCallId) {
   };
 
   connection.ontrack = event => {
+    const remoteAudio = document.getElementById('remote-audio');
+    if (!remoteAudio || !event.streams?.[0]) return;
 
-  const remoteAudio =
-    document.getElementById('remote-audio');
+    remoteAudio.autoplay = true;
+    remoteAudio.playsInline = true;
+    remoteAudio.srcObject = event.streams[0];
 
-  if (
-    !remoteAudio ||
-    !event.streams?.[0]
-  ) {
-    return;
-  }
+    setCallStatus('Terhubung');
 
-  remoteAudio.autoplay = true;
-  remoteAudio.playsInline = true;
+    const playAudio = async () => {
+      try {
+        await remoteAudio.play();
+      } catch (error) {
+        console.warn('Audio remote belum dapat diputar:', error);
+        document.addEventListener(
+          'touchstart',
+          () => {
+            remoteAudio.play().catch(() => {});
+          },
+          { once: true }
+        );
+      }
+    };
+    playAudio();
+  };
 
-  remoteAudio.srcObject =
-    event.streams[0];
+  connection.oniceconnectionstatechange = () => {
+    if (activeCallId !== expectedCallId || peerConnection !== connection) return;
+    const state = connection.iceConnectionState;
 
-  setCallStatus('Terhubung');
-
-  const playAudio = async () => {
-
-    try {
-
-      await remoteAudio.play();
-
-    } catch (error) {
-
-      console.warn(
-        'Audio remote belum dapat diputar:',
-        error
-      );
-
-      document.addEventListener(
-        'touchstart',
-        () => {
-          remoteAudio.play().catch(() => {});
-        },
-        { once: true }
-      );
+    if (state === 'connected' || state === 'completed') {
+      setCallStatus('Terhubung');
+      if (disconnectTimer) {
+        clearTimeout(disconnectTimer);
+        disconnectTimer = null;
+      }
+    } else if (state === 'disconnected') {
+      setCallStatus('Mencoba menyambungkan ulang...');
+      if (disconnectTimer) clearTimeout(disconnectTimer);
+      disconnectTimer = setTimeout(() => {
+        if (peerConnection && (peerConnection.iceConnectionState === 'disconnected' || peerConnection.iceConnectionState === 'failed')) {
+          cleanupCall(false);
+        }
+      }, 15000);
+    } else if (state === 'failed' || state === 'closed') {
+      cleanupCall(false);
     }
   };
 
-  playAudio();
-};
+  connection.onconnectionstatechange = () => {
+    if (activeCallId !== expectedCallId || peerConnection !== connection) return;
+    const state = connection.connectionState;
 
-  connection.oniceconnectionstatechange = () => {
-  if (
-    activeCallId !== expectedCallId ||
-    peerConnection !== connection
-  ) {
-    return;
-  }
-
-  const state = connection.iceConnectionState;
-
-  console.log('[ICE]', state);
-
-  if (
-    state === 'connected' ||
-    state === 'completed'
-  ) {
-    setCallStatus('Terhubung');
-
-    if (disconnectTimer) {
-      clearTimeout(disconnectTimer);
-      disconnectTimer = null;
-    }
-  }
-
-  else if (state === 'disconnected') {
-    setCallStatus('Mencoba menyambungkan ulang...');
-
-    if (disconnectTimer) {
-      clearTimeout(disconnectTimer);
-    }
-
-    disconnectTimer = setTimeout(() => {
-      if (
-        peerConnection &&
-        (
-          peerConnection.iceConnectionState === 'disconnected' ||
-          peerConnection.iceConnectionState === 'failed'
-        )
-      ) {
-        cleanupCall(false);
+    if (state === 'connected') {
+      if (disconnectTimer) {
+        clearTimeout(disconnectTimer);
+        disconnectTimer = null;
       }
-    }, 15000);
-  }
-
-  else if (
-    state === 'failed' ||
-    state === 'closed'
-  ) {
-    cleanupCall(false);
-  }
-};
-
-connection.onconnectionstatechange = () => {
-
-  if (
-    activeCallId !== expectedCallId ||
-    peerConnection !== connection
-  ) {
-    return;
-  }
-
-  const state = connection.connectionState;
-
-  console.log('[WebRTC]', state);
-
-  if (state === 'connected') {
-
-    if (disconnectTimer) {
-      clearTimeout(disconnectTimer);
-      disconnectTimer = null;
+      setCallStatus('Terhubung');
+    } else if (state === 'disconnected') {
+      setCallStatus('Menyambungkan ulang...');
+      if (disconnectTimer) clearTimeout(disconnectTimer);
+      disconnectTimer = setTimeout(() => {
+        if (peerConnection && (peerConnection.connectionState === 'disconnected' || peerConnection.connectionState === 'failed')) {
+          cleanupCall(false);
+        }
+      }, 15000);
+    } else if (state === 'failed' || state === 'closed') {
+      cleanupCall(false);
     }
-
-    setCallStatus('Terhubung');
-  }
-
-  else if (state === 'disconnected') {
-
-    setCallStatus('Menyambungkan ulang...');
-
-    if (disconnectTimer) {
-      clearTimeout(disconnectTimer);
-    }
-
-    disconnectTimer = setTimeout(() => {
-
-      if (
-        peerConnection &&
-        (
-          peerConnection.connectionState === 'disconnected' ||
-          peerConnection.connectionState === 'failed'
-        )
-      ) {
-        cleanupCall(false);
-      }
-
-    }, 15000);
-  }
-
-  else if (
-    state === 'failed' ||
-    state === 'closed'
-  ) {
-    cleanupCall(false);
-  }
-};
+  };
 
   return connection;
 }
@@ -2228,17 +2180,10 @@ if (disconnectTimer) {
 }
 
 async function cleanupCall(notifyPeer = false) {
-  // Simpan state sebelum direset
   const callIdToEnd = activeCallId;
   const peerToNotify = targetUserId;
 
-  // Kirim sinyal end_call terlebih dahulu
-  if (
-    notifyPeer &&
-    callIdToEnd &&
-    peerToNotify &&
-    currentUser?.id
-  ) {
+  if (notifyPeer && callIdToEnd && peerToNotify && currentUser?.id) {
     try {
       await sendCallSignal('end_call', peerToNotify);
     } catch (err) {
@@ -2246,109 +2191,70 @@ async function cleanupCall(notifyPeer = false) {
     }
   }
 
-  // Stop ringtone
   try {
     if (callRingtone) {
       callRingtone.pause();
       callRingtone.currentTime = 0;
     }
-  } catch (e) {
-    console.error(e);
-  }
+  } catch (e) {}
 
-  // Bersihkan audio remote
   const remoteAudio = document.getElementById('remote-audio');
-
   if (remoteAudio) {
     try {
       if (remoteAudio.srcObject) {
-        remoteAudio.srcObject
-          .getTracks()
-          .forEach(track => track.stop());
+        remoteAudio.srcObject.getTracks().forEach(track => track.stop());
       }
-
       remoteAudio.pause();
       remoteAudio.srcObject = null;
       remoteAudio.removeAttribute('src');
       remoteAudio.load();
-    } catch (e) {
-      console.error(e);
-    }
+    } catch (e) {}
   }
 
-  // Stop seluruh track lokal (mikrofon)
   if (localStream) {
     try {
       localStream.getTracks().forEach(track => {
-        try {
-          track.stop();
-        } catch (_) {}
+        try { track.stop(); } catch (_) {}
       });
-    } catch (e) {
-      console.error(e);
-    }
-
+    } catch (e) {}
     localStream = null;
   }
 
-  // Tutup DataChannel jika ada
   if (window.dataChannel) {
-    try {
-      window.dataChannel.close();
-    } catch (e) {}
-
+    try { window.dataChannel.close(); } catch (e) {}
     window.dataChannel = null;
   }
 
-  // Tutup PeerConnection
   if (peerConnection) {
     try {
-      // Lepas sender terlebih dahulu
       peerConnection.getSenders().forEach(sender => {
-        try {
-          peerConnection.removeTrack(sender);
-        } catch (_) {}
+        try { peerConnection.removeTrack(sender); } catch (_) {}
       });
-
       peerConnection.ontrack = null;
       peerConnection.onicecandidate = null;
       peerConnection.oniceconnectionstatechange = null;
       peerConnection.onconnectionstatechange = null;
       peerConnection.onsignalingstatechange = null;
-
       peerConnection.close();
-    } catch (e) {
-      console.error(e);
-    }
-
+    } catch (e) {}
     peerConnection = null;
   }
 
-  // Tutup modal
   const modal = document.getElementById('call-modal');
-  if (modal) {
-    modal.classList.add('hidden');
-  }
+  if (modal) modal.classList.add('hidden');
 
-  // Sembunyikan tombol accept
   const acceptBtn = document.getElementById('btn-accept-call');
-  if (acceptBtn) {
-    acceptBtn.style.display = 'none';
-  }
+  if (acceptBtn) acceptBtn.style.display = 'none';
 
-  // Bersihkan ICE khusus call ini
   if (callIdToEnd) {
     pendingIceByCallId.delete(String(callIdToEnd));
   }
 
-  // Reset state global
   targetUserId = null;
   activeCallId = null;
   incomingOffer = null;
   iceCandidateQueue = [];
   acceptingCall = false;
-
-  console.log('Call cleanup completed');
 }
 
 function hangUpCall() {
@@ -2395,16 +2301,15 @@ async function startCall(peerUserId, peerName) {
   if (acceptBtn) acceptBtn.style.display = 'none';
 
   let stream = null;
-
   try {
     stream = await navigator.mediaDevices.getUserMedia({
-  audio: {
-    echoCancellation: true,
-    noiseSuppression: true,
-    autoGainControl: true
-  },
-  video: false
-});
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true
+      },
+      video: false
+    });
 
     if (activeCallId !== thisCallId) {
       stream.getTracks().forEach(track => track.stop());
@@ -2499,15 +2404,8 @@ function handleIncomingCall(data) {
   });
 
   if (navigator.vibrate) {
-  navigator.vibrate([
-    500,
-    300,
-    500,
-    300,
-    500
-  ]);
-}
-
+    navigator.vibrate([500, 300, 500, 300, 500]);
+  }
 }
 
 async function acceptCall() {
@@ -2535,7 +2433,6 @@ async function acceptCall() {
   setCallStatus('Menghubungkan...');
 
   let stream = null;
-
   try {
     stream = await navigator.mediaDevices.getUserMedia({
       audio: true,
@@ -2634,13 +2531,7 @@ async function handleCallAnswered(data) {
 }
 
 async function handleIceCandidate(data) {
-  if (
-    !data ||
-    !data.callId ||
-    !data.candidate
-  ) {
-    return;
-  }
+  if (!data || !data.callId || !data.candidate) return;
 
   const messageCallId = String(data.callId);
   const senderId = normalizeCallUserId(data.fromUserId);
@@ -2650,16 +2541,11 @@ async function handleIceCandidate(data) {
     return;
   }
 
-  if (
-    messageCallId !== String(activeCallId) ||
-    senderId !== normalizeCallUserId(targetUserId)
-  ) {
+  if (messageCallId !== String(activeCallId) || senderId !== normalizeCallUserId(targetUserId)) {
     return;
   }
 
-  if (iceCandidateQueue.length >= MAX_ICE_CANDIDATES) {
-    return;
-  }
+  if (iceCandidateQueue.length >= MAX_ICE_CANDIDATES) return;
 
   if (!peerConnection || !peerConnection.remoteDescription) {
     queueIceCandidate(data.candidate);
@@ -2799,59 +2685,28 @@ async function handleUpdateProfile(event) {
 }
 
 window.addEventListener('pagehide', (event) => {
-
-  if (event.persisted) {
-    return;
-  }
-
-  if (activeCallId) {
-    cleanupCall(true);
-  }
+  if (event.persisted) return;
+  if (activeCallId) cleanupCall(true);
 });
 
 window.addEventListener('beforeunload', () => {
-
-  if (activeCallId) {
-    cleanupCall(true);
-  }
+  if (activeCallId) cleanupCall(true);
 });
 
 document.addEventListener(
   'visibilitychange',
   () => {
-
-    if (
-      document.visibilityState === 'visible' &&
-      activeCallId
-    ) {
-
-      const remoteAudio =
-        document.getElementById(
-          'remote-audio'
-        );
-
-      if (
-        remoteAudio &&
-        remoteAudio.srcObject
-      ) {
-
-        remoteAudio
-          .play()
-          .catch(() => {});
+    if (document.visibilityState === 'visible' && activeCallId) {
+      const remoteAudio = document.getElementById('remote-audio');
+      if (remoteAudio && remoteAudio.srcObject) {
+        remoteAudio.play().catch(() => {});
       }
-
-      if (
-        peerConnection &&
-        peerConnection.connectionState ===
-          'connected'
-      ) {
-
+      if (peerConnection && peerConnection.connectionState === 'connected') {
         setCallStatus('Terhubung');
       }
     }
   }
 );
-
 
 // ==========================================================
 // INITIALIZE
@@ -2862,6 +2717,7 @@ window.addEventListener('DOMContentLoaded', () => {
   if (currentUser && localStorage.getItem(STORAGE_KEYS.token)) {
     updateUserInterface();
     connectAuthenticatedSocket();
+    void loadChatHistoryRest();
   } else {
     showAuthScreen();
   }
