@@ -282,7 +282,6 @@ function registerSocketEvents() {
 
   socket.on('connect', () => {
     console.log('Socket terhubung:', socket.id);
-    // Muat riwayat chat via REST sebagai cadangan otomatis saat tersambung
     void loadChatHistoryRest();
   });
 
@@ -358,27 +357,20 @@ async function parseJsonResponse(response) {
 }
 
 async function apiFetch(url, options = {}) {
-  // 1. Ambil data autentikasi dari localStorage / state
   const token = localStorage.getItem(STORAGE_KEYS?.token) || '';
   const userId = currentUser ? String(currentUser.id) : '';
 
-  // 2. Pisahkan headers bawaan dari options lainnya
   const { headers: customHeaders, ...remainingOptions } = options;
-
-  // 3. Inisialisasi objek Headers bawaan browser secara aman
   const headers = new Headers(customHeaders || {});
 
-  // 4. Set custom headers untuk kebutuhan tracking/autentikasi backend
   if (userId) headers.set('x-user-id', userId);
   if (token) headers.set('x-session-token', token);
   
-  // Otomatis set Content-Type ke JSON jika mengirimkan body berupa object/array (bukan FormData)
   if (remainingOptions.body && typeof remainingOptions.body === 'object' && !(remainingOptions.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json');
     remainingOptions.body = JSON.stringify(remainingOptions.body);
   }
 
-  // 5. Gabungkan kembali ke dalam konfigurasi request fetch
   const requestOptions = {
     ...remainingOptions,
     headers: headers
@@ -410,7 +402,6 @@ async function apiFetch(url, options = {}) {
   return response;
 }
 
-// Fungsi REST Fallback untuk memastikan riwayat chat selalu terambil
 async function loadChatHistoryRest() {
   try {
     const response = await apiFetch('/api/messages');
@@ -619,7 +610,6 @@ function switchTab(tab) {
   }
 }
 
-// Dioptimalkan menjadi async agar sinkronisasi GPS selesai dulu sebelum load data keluarga
 async function switchTabNav(tabName, buttonElement) {
   const contents = document.querySelectorAll('.tab-content');
   contents.forEach(content => {
@@ -651,7 +641,6 @@ async function switchTabNav(tabName, buttonElement) {
   } else if (tabName === 'agenda') {
     loadAgendaAndBirthdays();
   } else if (tabName === 'family') {
-    // OPTIMASI: Tunggu hingga update GPS selesai dikirim ke database, baru muat daftar anggota
     const familyContainer = document.getElementById('family-list-container');
     if (familyContainer) {
       familyContainer.innerHTML = '<p style="color: gray; text-align: center; grid-column: span 3; padding: 20px;">Menyinkronkan lokasi GPS...</p>';
@@ -660,6 +649,33 @@ async function switchTabNav(tabName, buttonElement) {
     loadFamilyMembers();
   } else if (tabName === 'chat') {
     void loadChatHistoryRest();
+  }
+}
+
+// Variabel Global untuk background tracking lokasi & modal
+let locationTimeout = null;
+let familyModalTimeout = null;
+let isModalOpen = false;
+
+async function startBackgroundLocationTracking() {
+  if (locationTimeout) clearTimeout(locationTimeout);
+  if (!currentUser) return;
+
+  try {
+    await updateMyCurrentLocation();
+  } catch (error) {
+    console.error("Gagal memperbarui lokasi pada siklus ini:", error);
+  } finally {
+    if (currentUser) {
+      locationTimeout = setTimeout(startBackgroundLocationTracking, 30000);
+    }
+  }
+}
+
+function stopBackgroundLocationTracking() {
+  if (locationTimeout) {
+    clearTimeout(locationTimeout);
+    locationTimeout = null;
   }
 }
 
@@ -704,8 +720,8 @@ function updateUserInterface() {
   showMainScreen();
   void loadChatHistoryRest();
 
-  // OPTIMASI TAMBAHAN: Langsung rekam koordinat GPS di latar belakang begitu pengguna sukses login
-  updateMyCurrentLocation();
+  // Memulai pelacakan latar belakang berkala
+  startBackgroundLocationTracking();
 }
 
 // ==========================================================
@@ -825,6 +841,7 @@ function logout() {
   isLoggingOut = true;
 
   cleanupCall(true);
+  stopBackgroundLocationTracking();
 
   if (socket) {
     socket.disconnect();
@@ -1868,7 +1885,6 @@ async function loadFamilyMembers() {
 
 let latestUserCoords = { latitude: null, longitude: null };
 
-// Perbarui dan simpan koordinat GPS pengguna (Diubah menjadi Promise agar bisa di-await)
 function updateMyCurrentLocation() {
   if (!navigator.geolocation) {
     return Promise.resolve(false);
@@ -1890,7 +1906,6 @@ function updateMyCurrentLocation() {
         });
         
         if (response.ok) {
-          // Jika tab keluarga sedang aktif, muat ulang daftar anggota secara real-time
           const familyTab = document.getElementById('content-family');
           if (familyTab && familyTab.classList.contains('active')) {
             loadFamilyMembers();
@@ -1914,76 +1929,96 @@ function updateMyCurrentLocation() {
   });
 }
 
-// Buka Modal Lokasi Keluarga (Menggunakan ulang updateMyCurrentLocation agar tidak ada duplikasi)
 async function openFamilyLocationModal() {
   const modal = document.getElementById('family-location-modal');
   const container = document.getElementById('family-location-container');
   
   if (!modal || !container) return;
   
+  if (familyModalTimeout) {
+    clearTimeout(familyModalTimeout);
+    familyModalTimeout = null;
+  }
+  
+  isModalOpen = true;
   modal.classList.remove('hidden');
   container.innerHTML = '<p style="text-align: center; color: var(--text-muted); padding: 20px;">Mengambil posisi GPS terkini...</p>';
 
-  // Panggil pembaruan lokasi dan tunggu hingga proses sinkronisasi database selesai
-  await updateMyCurrentLocation();
-
-  container.innerHTML = '<p style="text-align: center; color: var(--text-muted); padding: 20px;">Memuat data lokasi keluarga...</p>';
-
   try {
-    const response = await apiFetch('/api/users');
-    if (!response.ok) throw new Error('Gagal mengambil data pengguna.');
-
-    const users = await response.json();
-    container.replaceChildren();
-
-    if (!Array.isArray(users) || users.length === 0) {
-      container.innerHTML = '<p style="text-align: center; color: var(--text-muted);">Tidak ada anggota keluarga ditemukan.</p>';
-      return;
-    }
-
-    users.forEach(user => {
-      const card = document.createElement('div');
-      card.className = 'location-member-card';
-
-      const avatarSrc = user.photo_url ? getSafeImageUrl(user.photo_url) : '/logo-192.png';
-      const hasLocation = user.latitude && user.longitude;
-      const areaAcuan = user.area_name || (hasLocation ? 'Area Terdeteksi (GPS Aktif)' : 'Lokasi belum dibagikan');
-      const coordText = hasLocation ? `${Number(user.latitude).toFixed(5)}, ${Number(user.longitude).toFixed(5)}` : 'Koordinat tidak tersedia';
-
-      card.innerHTML = `
-        <img src="${avatarSrc}" alt="${user.name}">
-        <div class="location-info">
-          <h5>${user.name}</h5>
-          <p><i class="fa-solid fa-location-dot" style="color: var(--danger);"></i> ${areaAcuan}</p>
-          <div class="location-coord-badge">
-            <i class="fa-solid fa-satellite-dish"></i> ${coordText}
-          </div>
-          ${hasLocation ? `
-            <a href="https://maps.google.com/?q=${user.latitude},${user.longitude}" target="_blank" class="map-action-btn">
-              <i class="fa-solid fa-map"></i> Buka di Google Maps
-            </a>
-          ` : ''}
-        </div>
-      `;
-      container.appendChild(card);
-    });
-
-  } catch (error) {
-    console.error('Error memuat lokasi keluarga:', error);
-    container.innerHTML = '<p style="text-align: center; color: var(--danger); padding: 10px;">Gagal memuat informasi lokasi.</p>';
+    await updateMyCurrentLocation();
+  } catch (e) {
+    console.warn('Gagal memperbarui lokasi mandiri:', e);
   }
+
+  const fetchAndRenderLocations = async () => {
+    if (!isModalOpen) return;
+
+    try {
+      const response = await apiFetch('/api/users');
+      if (!response.ok) throw new Error('Respon API tidak OK');
+
+      const users = await response.json();
+      if (!Array.isArray(users) || users.length === 0) return;
+
+      const scrollPos = container.scrollTop;
+      const fragment = document.createDocumentFragment();
+
+      users.forEach(user => {
+        const card = document.createElement('div');
+        card.className = 'location-member-card';
+
+        const avatarSrc = user.photo_url ? getSafeImageUrl(user.photo_url) : '/logo-192.png';
+        const hasLocation = user.latitude && user.longitude;
+        const areaAcuan = user.area_name || (hasLocation ? 'Area Terdeteksi (GPS Aktif)' : 'Lokasi belum dibagikan');
+        const coordText = hasLocation ? `${Number(user.latitude).toFixed(5)}, ${Number(user.longitude).toFixed(5)}` : 'Koordinat tidak tersedia';
+
+        card.innerHTML = `
+          <img src="${avatarSrc}" alt="${user.name}">
+          <div class="location-info">
+            <h5>${user.name}</h5>
+            <p><i class="fa-solid fa-location-dot" style="color: var(--danger);"></i> ${areaAcuan}</p>
+            <div class="location-coord-badge">
+              <i class="fa-solid fa-satellite-dish"></i> ${coordText}
+            </div>
+            ${hasLocation ? `
+              <a href="https://maps.google.com/?q=${user.latitude},${user.longitude}" target="_blank" class="map-action-btn">
+                <i class="fa-solid fa-map"></i> Buka di Google Maps
+              </a>
+            ` : ''}
+          </div>
+        `;
+        fragment.appendChild(card);
+      });
+
+      container.replaceChildren(fragment);
+      container.scrollTop = scrollPos;
+
+    } catch (err) {
+      console.warn('Gagal memuat ulang data lokasi:', err);
+    } finally {
+      if (isModalOpen) {
+        familyModalTimeout = setTimeout(fetchAndRenderLocations, 5000);
+      }
+    }
+  };
+
+  await fetchAndRenderLocations();
 }
 
 function closeFamilyLocationModal() {
   const modal = document.getElementById('family-location-modal');
   if (modal) modal.classList.add('hidden');
+  
+  isModalOpen = false;
+  if (familyModalTimeout) {
+    clearTimeout(familyModalTimeout);
+    familyModalTimeout = null;
+  }
 }
 
-// Fungsi Aksi Tombol SOS Darurat
 async function triggerSOSAlert() {
   if (!confirm('PERHATIAN: Kirim sinyal darurat SOS ke seluruh anggota keluarga sekarang?')) return;
 
-  // Coba ambil posisi terbaru sesaat sebelum mengirim SOS jika koordinat masih kosong
   if (!latestUserCoords.latitude || !latestUserCoords.longitude) {
     await updateMyCurrentLocation();
   }
@@ -2016,7 +2051,6 @@ async function triggerSOSAlert() {
     alert('Terjadi kesalahan jaringan saat mengirim SOS.');
   }
 }
-
 
 // ==========================================================
 // PROFILE / PASSWORD / EMAIL
